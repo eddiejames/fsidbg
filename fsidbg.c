@@ -349,6 +349,7 @@ const char *i2c_help =
 	"-r --read <x>			do read op of x bytes\n"
 	"-w --write <x>			do write op of x bytes\n"
 	"-a --address <x>		use I2C device address x\n"
+	"-s --scan			scan bus for devices\n"
 	"-d --data x			specify data, in hex bytes\n"
 	"-o --offset <x>			specify offset; if you want a "
 		"specific\n"
@@ -366,6 +367,7 @@ int do_i2c(int argc, char **argv, char *dev)
 	enum command_type {
 		READ,
 		WRITE,
+		SCAN,
 		NUM_COMMAND_TYPES
 	};
 
@@ -378,10 +380,11 @@ int do_i2c(int argc, char **argv, char *dev)
 	unsigned long size = 0;
 	char *arg_data = NULL;
 	void *offset = NULL;
-	const char *opts = "r:w:a:d:o:h";
+	const char *opts = "r:w:sa:d:o:h";
 	struct option lopts[] = {
 		{ "read", 1, 0, 'r' },
 		{ "write", 1, 0, 'w' },
+		{ "scan", 0, 0, 's' },
 		{ "address", 1, 0, 'a' },
 		{ "data", 1, 0, 'd' },
 		{ "offset", 1, 0, 'o' },
@@ -420,6 +423,9 @@ int do_i2c(int argc, char **argv, char *dev)
 				rc = -1;
 				goto free;
 			}
+			break;
+		case 's':
+			cmd = SCAN;
 			break;
 		case 'a':
 			if ((rc = arg_to_uint(optarg, &tmp)))
@@ -498,7 +504,6 @@ int do_i2c(int argc, char **argv, char *dev)
 	}
 
 	ioctl(fd, I2C_TENBIT, 1);
-	ioctl(fd, I2C_SLAVE, address);
 
 	switch (cmd) {
 	case READ:
@@ -534,6 +539,7 @@ int do_i2c(int argc, char **argv, char *dev)
 			printf(":\n");
 			display_buf(data, size);
 		} else {
+			ioctl(fd, I2C_SLAVE, address);
 			rc = read(fd, data, size);
 			if (rc < 0) {
 				printf("failed to write offset and read: %s\n",
@@ -547,6 +553,7 @@ int do_i2c(int argc, char **argv, char *dev)
 		}
 		break;
 	case WRITE:
+		ioctl(fd, I2C_SLAVE, address);
 		rc = write(fd, data, size + offset_width);
 		if (rc < 0) {
 			printf("failed to write: %s\n", strerror(errno));
@@ -564,6 +571,23 @@ int do_i2c(int argc, char **argv, char *dev)
 		printf(":\n");
 		display_buf(data + offset_width, size);
 		rc = 0;
+		break;
+	case SCAN:
+	{
+		unsigned int i, found = 0;
+		unsigned char sdata;
+		unsigned char found_list[128];
+
+		for (i = 0; i < 256; i += 2) {
+			ioctl(fd, I2C_SLAVE, i);
+			rc = read(fd, &sdata, 1);
+			if (rc == 1)
+				found_list[found++] = i;
+		}
+
+		printf("found %d devices:\n", found);
+		display_buf(found_list, found);
+	}
 		break;
 	default:
 		printf("unknown command\n");
