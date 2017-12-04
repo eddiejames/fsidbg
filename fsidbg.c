@@ -827,11 +827,16 @@ int do_getsram(int fd, uint32_t addr, uint8_t *data, size_t len, char verbose)
 		goto done;
 	}
 
-	rc = do_read_sbe(fd, (char *)buf, 12);
+	rc = do_read_sbe(fd, (char *)buf, 16);
 	if (rc) {
 		printf("failed to read getsram from %08X response: %s\n", addr,
 		       errno ? strerror(errno) : strerror(rc));
 		goto done;
+	}
+
+	if (verbose) {
+		printf("getsram return:\n");
+		display_buf((uint8_t *)buf, 16);
 	}
 
 	resp_len = be32toh(buf[0]);
