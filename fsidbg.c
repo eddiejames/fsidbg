@@ -358,6 +358,7 @@ const char *i2c_help =
 	"				offset the appropriate width. (e.g. -o"
 		" 0000\n"
 	"				will give you 2 bytes offset)\n"
+	"-t --timeout <x>		specify timeout in ms (default 1000)\n"
 	"Example:\n"
 	"    fsidbg /dev/i2c-100 -a 0xA0 -o 0000 -r 4\n"
 	"        Reads 4 bytes from offset 0 of 0xA0 on /dev/i2c-100\n";
@@ -380,7 +381,7 @@ int do_i2c(int argc, char **argv, char *dev)
 	unsigned long size = 0;
 	char *arg_data = NULL;
 	void *offset = NULL;
-	const char *opts = "r:w:sa:d:o:h";
+	const char *opts = "r:w:sa:d:o:t:h";
 	struct option lopts[] = {
 		{ "read", 1, 0, 'r' },
 		{ "write", 1, 0, 'w' },
@@ -388,6 +389,7 @@ int do_i2c(int argc, char **argv, char *dev)
 		{ "address", 1, 0, 'a' },
 		{ "data", 1, 0, 'd' },
 		{ "offset", 1, 0, 'o' },
+		{ "timeout", 1, 0, 't' },
 		{ "help", 0, 0, 'h' },
 		{ 0, 0, 0, 0 }
 	};
@@ -479,6 +481,13 @@ int do_i2c(int argc, char **argv, char *dev)
 				break;
 			}
 		}
+			break;
+		case 't':
+			if ((rc = arg_to_uint(optarg, &tmp)))
+				goto free;
+
+			if (tmp >= 10)
+				ioctl(fd, I2C_TIMEOUT, tmp / 10);
 			break;
 		case 'h':
 			printf("%s", i2c_help);
