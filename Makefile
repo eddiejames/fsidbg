@@ -3,4 +3,4 @@ all:
 
 .PHONY: clean
 clean:
-	rm fsidbg
+	rm -f fsidbg

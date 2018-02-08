@@ -516,9 +516,48 @@ int do_i2c(int argc, char **argv, char *dev)
 
 	switch (cmd) {
 	case READ:
-		if (offset_width) {
-			int i;
-			struct i2c_rdwr_ioctl_data rdwr;
+	{
+		unsigned int i = 0;
+		struct i2c_rdwr_ioctl_data rdwr;
+		struct i2c_msg *fmsgs = NULL;
+
+		if (size > 8192) {
+			unsigned int num_msgs = (size / 8192) + 1;
+			unsigned int total = 0;
+
+			if (offset_width)
+				num_msgs++;
+
+			fmsgs = malloc(sizeof(struct i2c_msg) * num_msgs);
+			memset(fmsgs, 0, sizeof(struct i2c_msg) * num_msgs);
+
+			if (offset_width) {
+				fmsgs[0].addr = address;
+				fmsgs[0].flags = I2C_M_TEN;
+				fmsgs[0].len = offset_width;
+				fmsgs[0].buf = offset;
+
+				i++;
+			}
+
+			for (; i < num_msgs - 1; ++i) {
+				fmsgs[i].addr = address;
+				fmsgs[i].flags = I2C_M_TEN | I2C_M_RD;
+				fmsgs[i].len = 8192;
+				fmsgs[i].buf = &data[total];
+
+				total += 8192;
+			}
+
+			fmsgs[i].addr = address;
+			fmsgs[i].flags = I2C_M_TEN | I2C_M_STOP | I2C_M_RD;
+			fmsgs[i].len = size - total;
+			fmsgs[i].buf = &data[total];
+
+			rdwr.nmsgs = num_msgs;
+			rdwr.msgs = fmsgs;
+		}
+		else if (offset_width) {
 			struct i2c_msg msgs[2];
 
 			msgs[0].addr = address;
@@ -533,20 +572,6 @@ int do_i2c(int argc, char **argv, char *dev)
 
 			rdwr.nmsgs = 2;
 			rdwr.msgs = msgs;
-
-			rc = ioctl(fd, I2C_RDWR, &rdwr);
-			if (rc) {
-				printf("failed to write offset and read: %s\n",
-				       strerror(errno));
-				goto done;
-			}
-
-			printf("read %ld bytes from 0x%02X, offset 0x", size,
-			       address);
-			for (i = 0; i < offset_width; ++i)
-				printf("%02X", msgs[0].buf[i]);
-			printf(":\n");
-			display_buf(data, size);
 		} else {
 			ioctl(fd, I2C_SLAVE, address);
 			rc = read(fd, data, size);
@@ -559,7 +584,26 @@ int do_i2c(int argc, char **argv, char *dev)
 			printf("read %ld bytes from 0x%02X:\n", size, address);
 			display_buf(data, size);
 			rc = 0;
+			goto done;
 		}
+
+		rc = ioctl(fd, I2C_RDWR, &rdwr);
+		if (rc) {
+			printf("failed to write offset and read: %s\n",
+			       strerror(errno));
+			if (fmsgs)
+				free(fmsgs);
+			goto done;
+		}
+
+		printf("read %ld bytes from 0x%02X, offset 0x", size, address);
+		for (i = 0; i < offset_width; ++i)
+			printf("%02X", rdwr.msgs[0].buf[i]);
+		printf(":\n");
+		display_buf(data, size);
+		if (fmsgs)
+			free(fmsgs);
+	}
 		break;
 	case WRITE:
 		ioctl(fd, I2C_SLAVE, address);
