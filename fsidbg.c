@@ -588,7 +588,7 @@ int do_i2c(int argc, char **argv, char *dev)
 		}
 
 		rc = ioctl(fd, I2C_RDWR, &rdwr);
-		if (rc) {
+		if (rc < 0) {
 			printf("failed to write offset and read: %s\n",
 			       strerror(errno));
 			if (fmsgs)
